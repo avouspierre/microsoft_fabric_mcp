@@ -334,7 +334,7 @@ class FabricApiClient:
             return _SCHEDULES_CACHE[cache_key]
 
         schedules = await self.paginated_request(
-            f"workspaces/{workspace_id}/items/{item_id}/schedules"
+            f"workspaces/{workspace_id}/items/{item_id}/jobs/Pipeline/schedules"
         )
 
         # Cache the results
@@ -354,7 +354,7 @@ class FabricApiClient:
         for item in items:
             try:
                 schedules = await self.paginated_request(
-                    f"workspaces/{workspace_id}/items/{item['id']}/schedules"
+                    f"workspaces/{workspace_id}/items/{item['id']}/jobs/Pipeline/schedules"
                 )
                 for schedule in schedules:
                     schedule["itemName"] = item["displayName"]
@@ -1653,7 +1653,7 @@ async def list_item_schedules(workspace: str, item_name: str) -> str:
 
         # Get schedules for the item
         schedules = await client.paginated_request(
-            f"workspaces/{workspace_id}/items/{item['id']}/schedules"
+            f"workspaces/{workspace_id}/items/{item['id']}/jobs/Pipeline/schedules"
         )
 
         if not schedules:
@@ -1663,22 +1663,21 @@ async def list_item_schedules(workspace: str, item_name: str) -> str:
         markdown += f"**Item Type**: {item['type']}\n"
         markdown += f"**Workspace**: {workspace}\n\n"
 
-        markdown += "| Schedule ID | Job Type | Enabled | Frequency | Start Date | End Date | Timezone |\n"
-        markdown += "|-------------|----------|---------|-----------|------------|----------|----------|\n"
+        markdown += "| Schedule ID | Enabled | Type | Heure(s) | Start Date | End Date | Timezone |\n"
+        markdown += "|-------------|---------|------|----------|------------|----------|----------|\n"
 
         for schedule in schedules:
             enabled = "✅ Yes" if schedule.get("enabled", False) else "❌ No"
-            frequency = schedule.get("recurrence", {}).get("frequency", "N/A")
-            start_date = schedule.get("recurrence", {}).get("startDate", "N/A")
-            end_date = schedule.get("recurrence", {}).get("endDate", "N/A")
-            timezone = schedule.get("recurrence", {}).get("timeZone", "N/A")
-
-            markdown += (
-                f"| {schedule.get('id', 'N/A')} | {schedule.get('jobType', 'N/A')} | "
-            )
-            markdown += (
-                f"{enabled} | {frequency} | {start_date} | {end_date} | {timezone} |\n"
-            )
+            config = schedule.get("configuration", {})
+            times = config.get("times") or []
+            time_str = ", ".join(times) if times else "N/A"
+            frequency = f"{config.get('type', 'N/A')} @ {time_str}"
+            start_date = config.get("startDateTime", "N/A")
+            end_date = config.get("endDateTime", "N/A")
+            timezone = config.get("localTimeZoneId", "N/A")
+           
+            freq_type = config.get("type", "N/A")
+            markdown += f"| {schedule.get('id', 'N/A')} | {enabled} | {freq_type} | {time_str} | {start_date} | {end_date} | {timezone} |\n"
 
         return markdown
 
@@ -1715,7 +1714,7 @@ async def list_workspace_schedules(workspace: str) -> str:
         for item in items:
             try:
                 schedules = await client.paginated_request(
-                    f"workspaces/{workspace_id}/items/{item['id']}/schedules"
+                   f"workspaces/{workspace_id}/items/{item['id']}/jobs/Pipeline/schedules"
                 )
                 if schedules:
                     for schedule in schedules:
@@ -1751,9 +1750,10 @@ async def list_workspace_schedules(workspace: str) -> str:
 
         for schedule in all_schedules:
             status = "✅ Enabled" if schedule.get("enabled", False) else "❌ Disabled"
-            frequency = schedule.get("recurrence", {}).get("frequency", "N/A")
-            next_run = schedule.get("recurrence", {}).get("startDate", "N/A")
-            timezone = schedule.get("recurrence", {}).get("timeZone", "N/A")
+            config = schedule.get("configuration", {})
+            frequency = f"{config.get('type', 'N/A')} / {config.get('interval', '')}min"
+            next_run = config.get("startDateTime", "N/A")
+            timezone = config.get("localTimeZoneId", "N/A")
 
             markdown += f"| {schedule['itemName']} | {schedule['itemType']} | "
             markdown += f"{schedule.get('jobType', 'N/A')} | {status} | "
